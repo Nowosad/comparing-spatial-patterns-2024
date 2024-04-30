@@ -1,0 +1,248 @@
+---
+title: "Methods for comparing two layers of spatial continuous raster data"
+author: 
+    - name: "Jakub Nowosad"
+      orcid: 0000-0002-1057-3721
+date: last-modified
+date-format: "[Last Updated:] MMMM, YYYY"
+format:
+    html:
+        toc: true
+        toc-depth: 4
+        number-sections: true
+        embed-resources: true
+license: "CC BY"
+bibliography: refs.bib
+---
+
+```{r 02-categorical-1}
+#| include: false
+knitr::knit_hooks$set(time_it = local({
+    now = NULL
+    function(before, options) {
+        if (before) {
+        # record the current time before each chunk
+        now <<- Sys.time()
+        } else {
+        # calculate the time difference after a chunk
+        res = difftime(Sys.time(), now, units = "secs")
+        # return a character string to show the time
+        paste("*Time for the above code chunk to run:", round(res,
+            2), "seconds*")
+        }
+    }
+}))
+knitr::opts_chunk$set(time_it = TRUE, message = FALSE)
+```
+
+This document shows a set of examples related to the article "Comparing spatial patterns in raster data using R". 
+The examples are focused on comparing two layers of spatial categorical raster data, and are divided into three groups: raster outcome, single value outcome, and multiple value outcome.
+
+The examples in this document use two raster layers representing the Corine Land Cover (CLC) data [@europeanenvironmentagencyCORINELandCover2019] for Tartu, Estonia, for the years 2000 and 2018. 
+The **terra** package [@hijmansTerraSpatialData2024] is used for raster data manipulation.
+
+The calculation time for each example is estimated and displayed at the end of each code chunk.
+
+```{r 02-categorical-2, time_it=FALSE}
+library(terra)
+clc2000 = rast("data/clc2000_tartu.tif")
+clc2018 = rast("data/clc2018_tartu.tif")
+plot(c(clc2000, clc2018))
+```
+
+# Raster outcome
+
+## Non-spatial context
+
+### Non-disjoint areas
+
+#### The binary difference between two rasters
+
+```{r 02-categorical-3}
+clc_diff = clc2018 != clc2000
+plot(clc_diff)
+```
+
+## Spatial context
+
+### Non-disjoint areas
+
+#### The difference between a focal measure of two rasters (e.g., selected landscape metric)
+
+This example uses the **landscapemetrics** package [@hesselbarthLandscapemetricsOpenSource2019].
+
+```{r 02-categorical-4}
+library(landscapemetrics)
+window = matrix(1, nrow = 5, ncol = 5)
+clc2000_relmutinf_mw = window_lsm(clc2000, window = window, what = "lsm_l_relmutinf")
+clc2018_relmutinf_mw = window_lsm(clc2018, window = window, what = "lsm_l_relmutinf")
+clc2018_relmutinf_diff = abs(clc2018_relmutinf_mw[[1]][[1]] - clc2000_relmutinf_mw[[1]][[1]])
+plot(clc2018_relmutinf_diff)
+```
+
+```{r 02-categorical-5, time_it=FALSE}
+#| eval: false
+#| echo: false
+#| include: false
+library(motifmw)
+window_size = 51
+window = matrix(1, nrow = window_size, ncol = window_size)
+window = focalMat(rast(window), d = 10, type = "circle", fillNA = TRUE)
+window[window > 0] = 1
+clc2000_sign_mw = lsp_signature_mw(as.int(clc2000), window)
+clc2018_sign_mw = lsp_signature_mw(as.int(clc2018), window)
+clc_sign_mw = spq_compare(clc2000_sign_mw, clc2018_sign_mw, 
+                          dist_fun = "jensen-shannon")
+plot(clc_sign_mw)
+```
+
+#### Cross-entropy loss function
+
+This example uses the **spatialEco** package [@evansSpatialEco2023].
+
+```{r 02-categorical-13}
+library(spatialEco)
+clc_ce = raster.change(clc2000, clc2018, s = 5, 
+                       stat = "cross-entropy")
+plot(clc_ce)
+```
+
+# Single value outcome
+
+## Non-spatial context
+
+### Non-disjoint areas
+
+#### The proportion of changed pixels
+
+```{r 02-categorical-6}
+clc_diff = clc2018 != clc2000
+changed_pixels = freq(clc_diff)$count[2]
+total_pixels = ncell(clc_diff)
+proportion_changed = changed_pixels / total_pixels
+proportion_changed
+```
+
+#### The overall comparison [@pontiusStatisticalMethodsPartition2002]
+
+```{r 02-categorical-7}
+clc2000_freq = freq(clc2000)
+clc2018_freq = freq(clc2018)
+freq = merge(clc2000_freq, clc2018_freq, by = "value", all = TRUE)
+freq[is.na(freq)] = 0
+freq$diff = abs(freq$count.x - freq$count.y)
+sum_diff = sum(freq$diff)
+total_pixels = ncell(clc_diff)
+1 - sum_diff / total_pixels
+```
+
+#### Statistics of the differences between rasters' values
+
+Overall difference metrics from the **diffeR** package [@pontiusjr.DiffeRMetricsDifference2023].
+
+```{r 02-categorical-1-bis}
+library(diffeR)
+clc_ct = crosstabm(clc2000, clc2018)
+overallAllocD(clc_ct)
+overallDiff(clc_ct)
+overallExchangeD(clc_ct)
+overallQtyD(clc_ct)
+overallShiftD(clc_ct)
+```
+
+### Disjoint areas
+
+#### Comparison of the values of a non-spatial landscape metric
+
+This example uses the **landscapemetrics** package [@hesselbarthLandscapemetricsOpenSource2019].
+
+```{r 02-categorical-8}
+library(landscapemetrics)
+clc2000_shdi = lsm_l_shdi(clc2000)
+clc2018_shdi = lsm_l_shdi(clc2018)
+abs(clc2018_shdi$value - clc2000_shdi$value)
+```
+
+## Spatial context
+
+### Non-disjoint areas
+
+<!-- Multiple resolution procedure [@costanzaModelGoodnessFit1989]; Expanding window approach [@kuhnertComparingRasterMap2005]; Fuzzy Kappa [@hagen-zankerImprovedFuzzyKappa2009] -->
+
+```{r 02-categorical-9}
+#| eval: false
+#| include: false
+library(waywiser)
+cell_sizes = seq(10, 100, 10) * 1000
+clc_multi_scale = ww_multi_scale(truth = clc2000, estimate = clc2018,
+                                 metrics = list(yardstick::precision), 
+                                 cellsize = cell_sizes)
+clc_multi_scale
+```
+
+### Disjoint areas
+
+#### Comparison of the values of a landscape metric
+
+This example uses the **landscapemetrics** package [@hesselbarthLandscapemetricsOpenSource2019].
+
+```{r 02-categorical-10}
+library(landscapemetrics)
+clc2000_ed = lsm_l_ed(clc2000)
+clc2018_ed = lsm_l_ed(clc2018)
+abs(clc2018_ed$value - clc2000_ed$value)
+```
+
+#### Comparison of the values of Zhao's entropy for landscape mosaics  [@zhaoCalculatingSpatialConfigurational2019]
+
+This example uses the **bespatial** package [@nowosadBespatialBoltzmannEntropy2024].
+
+```{r 02-categorical-11}
+library(bespatial)
+clc2000_bes = bes_m_zhao(clc2000)
+clc2018_bes = bes_m_zhao(clc2018)
+abs(clc2018_bes$value - clc2000_bes$value)
+```
+
+<!-- fractaldim for categorical?? -->
+```{r 02-categorical-12}
+#| include: false
+# library(fractaldim)
+# clc2000_mat = as.matrix(clc2000, wide = TRUE)
+# clc2000_mat[is.na(clc2000_mat)] = 0
+# fd.estimate(clc2000_mat, methods="filter1",
+#          window.size = 100, step.size=100, plot.loglog = TRUE)
+```
+
+#### Dissimilarity of a spatial signature between two rasters [@jasiewiczExampleBasedRetrievalAlike2013]
+
+This example uses the **motif** and **spquery** packages [@nowosadMotifOpensourceTool2021a; @nowosadSpqueryQueriesSpatial2023].
+
+```{r 02-categorical-14}
+library(motif)
+library(spquery)
+clc2000_sign = lsp_signature(clc2000, type = "cove", threshold = 1) |>
+    lsp_add_terra(metadata = FALSE)
+clc2018_sign = lsp_signature(clc2018, type = "cove", threshold = 1) |>
+    lsp_add_terra(metadata = FALSE)
+clc_sign_comp = spq_compare(clc2000_sign, clc2018_sign, dist_fun = "jensen-shannon")
+plot(clc_sign_comp)
+values(clc_sign_comp)
+```
+
+#### Spatial association between regionalizations using V-measure
+
+This example uses the **sabre** package [@nowosadSpatialAssociationRegionalizations2018].
+
+```{r 02-categorical-15}
+library(sabre)
+clc_sabre = vmeasure_calc(clc2000, clc2018)
+plot(clc_sabre$map1)
+plot(clc_sabre$map2)
+```
+
+# Multiple value outcome
+
+```{r 02-categorical-16}
+table(values(clc2000), values(clc2018))
+```

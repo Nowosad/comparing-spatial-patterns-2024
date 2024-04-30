@@ -1,0 +1,474 @@
+---
+title: "Methods for comparing two layers of spatial continuous raster data"
+author: 
+    - name: "Jakub Nowosad"
+      orcid: 0000-0002-1057-3721
+date: last-modified
+date-format: "[Last Updated:] MMMM, YYYY"
+format:
+    html:
+        toc: true
+        toc-depth: 4
+        number-sections: true
+        embed-resources: true
+license: "CC BY"
+bibliography: refs.bib
+---
+
+```{r 01-continuous-1 }
+#| include: false
+knitr::knit_hooks$set(time_it = local({
+    now = NULL
+    function(before, options) {
+        if (before) {
+        # record the current time before each chunk
+        now <<- Sys.time()
+        } else {
+        # calculate the time difference after a chunk
+        res = difftime(Sys.time(), now, units = "secs")
+        # return a character string to show the time
+        paste("*Time for the above code chunk to run:", round(res,
+            2), "seconds*")
+        }
+    }
+}))
+knitr::opts_chunk$set(time_it = TRUE, message = FALSE)
+```
+
+
+This document shows a set of examples related to the article "Comparing spatial patterns in raster data using R". 
+The examples are focused on comparing two layers of spatial continuous raster data, and are divided into three groups: raster outcome, single value outcome, and multiple value outcome.
+
+The examples in this document use two raster layers representing NDVI values derived from Sentinel-2 images [@Sentinel2MSILevel2A2022] for early summer of 2018 and 2023 in the area of Tartu, Estonia.
+The **terra** package [@hijmansTerraSpatialData2024] is used for raster data manipulation.
+
+The calculation time for each example is estimated and displayed at the end of each code chunk.
+
+```{r 01-continuous-2, time_it = FALSE}
+library(terra)
+ndvi2018 = rast("data/sentinel2_ndvi2018s.tif")
+ndvi2023 = rast("data/sentinel2_ndvi2023s.tif")
+panel(c(ndvi2018, ndvi2023))
+```
+
+# Raster outcome
+
+## Non-spatial context
+
+### Non-disjoint areas
+
+#### The difference between values of two rasters for each cell
+
+```{r 01-continuous-3 }
+ndvi_diff = ndvi2023 - ndvi2018
+plot(ndvi_diff)
+```
+
+## Spatial context
+
+### Non-disjoint areas
+
+#### Correlation coefficient between focal regions of two rasters
+
+```{r 01-continuous-4 }
+ndvi_cor = focalPairs(c(ndvi2023, ndvi2018), w = 5,
+                      fun = "pearson", na.rm = TRUE)
+plot(ndvi_cor)
+```
+
+#### The difference between a focal measure of two rasters (1)
+
+This example uses the **geodiv** package [@smithGeodivMethodsCalculating2023].
+
+```{r 01-continuous-5 }
+# 'sa': average surface roughness
+library(geodiv)
+window = matrix(1, nrow = 5, ncol = 5)
+ndvi2018_sa_mw = focal_metrics(ndvi2018, window = window,
+                               metric = "sa", progress = FALSE)
+ndvi2023_sa_mw = focal_metrics(ndvi2023, window = window,
+                               metric = "sa", progress = FALSE)
+ndvi_diff_sa_mw = ndvi2023_sa_mw$sa - ndvi2018_sa_mw$sa
+plot(ndvi_diff_sa_mw)
+```
+
+#### The difference between a focal measure of two rasters (2)
+
+This example uses the **GLCMTextures** package [@ilichGLCMTextures2020].
+
+```{r 01-continuous-6 }
+library(GLCMTextures) 
+ndvi2018_q = quantize_raster(ndvi2018, n_levels = 16, method = "equal prob")
+ndvi2023_q = quantize_raster(ndvi2023, n_levels = 16, method = "equal prob")
+
+ndvi2018_textures = glcm_textures(ndvi2018_q, w = c(5, 5), na.rm = TRUE,
+                                  metrics = "glcm_homogeneity", 
+                                  n_levels = 16, quantization = "none") 
+ndvi2023_textures = glcm_textures(ndvi2023_q, w = c(5, 5), na.rm = TRUE,
+                                  metrics = "glcm_homogeneity",
+                                  n_levels = 16, quantization = "none")
+
+ndvi2023_textures_diff = ndvi2023_textures - ndvi2018_textures
+plot(ndvi2023_textures_diff)
+```
+
+#### Spatial autocorrelation analysis of the differences [@cliffComputingSpatialCorrespondence1970]
+
+```{r 01-continuous-7 }
+ndvi_diff = ndvi2023 - ndvi2018
+ndvi_diff_autocor = autocor(ndvi_diff, method = "moran", global = FALSE)
+plot(ndvi_diff_autocor)
+```
+
+#### Structural similarity index (SSIM) between two rasters
+
+This example uses the **SSIMmap** package [@haSSIMmapStructuralSimilarity2023].
+
+```{r 01-continuous-8 }
+library(SSIMmap)
+ndvi_ssim = ssim_raster(ndvi2018, ndvi2023, global = FALSE, w = 5)
+plot(ndvi_ssim)
+```
+
+#### Comparison of Rao's quadratic entropy [@raoDiversityDissimilarityCoefficients1982]
+
+This example uses the **rasterdiv** package [@rocchiniRasterdivInformationTheory2021].
+
+```{r 01-continuous-8b }
+#| warning: false
+library(rasterdiv)
+ndvi2018_int = ndvi2018 * 100
+ndvi2023_int = ndvi2023 * 100
+ndvi2018_rao = paRao(ndvi2018_int, window = 5, progBar = FALSE)
+ndvi2023_rao = paRao(ndvi2023_int, window = 5, progBar = FALSE)
+ndvi_rao_diff = ndvi2023_rao[[1]][[1]] - ndvi2018_rao[[1]][[1]]
+plot(ndvi_rao_diff)
+```
+
+# Single value outcome
+
+## Non-spatial context
+
+### Non-disjoint areas
+
+#### Statistics of the differences between rasters’ values (1)
+
+This example uses the **yardstick** package [@kuhnYardstickTidyCharacterizations2024].
+
+```{r 01-continuous-9 }
+library(yardstick)
+ndvi_rmse = rmse_vec(values(ndvi2023)[,1], values(ndvi2018)[,1])
+ndvi_rmse
+```
+
+#### Statistics of the differences between rasters’ values (2)
+
+This example uses the **diffeR** package [@pontiusjr.DiffeRMetricsDifference2023].
+
+```{r 01-continuous-10 }
+library(diffeR)
+ndvi_mad = MAD(ndvi2023, ndvi2018)
+ndvi_mad
+```
+
+### Disjoint areas
+
+#### Disimilarity between the distributions of two rasters' values
+
+This example uses the **philentropy** [@hgPhilentropyInformationTheory2018] package.
+
+```{r 01-continuous-11 }
+#| include: false
+#| eval: false
+library(philentropy)
+softmax = function(x) exp(x) / sum(exp(x))
+mat = cbind(values(ndvi2023)[,1], values(ndvi2018)[,1])
+mat = na.omit(mat)
+mat = apply(mat, 1, softmax)
+mat = apply(mat, 1, function(x) x / sum(x))
+mat = t(mat)
+# getDistMethods()
+philentropy::distance(mat, method = "kullback-leibler")
+```
+
+```{r 01-continuous-12}
+library(philentropy)
+softmax = function(x) {
+    exp_x = exp(x - max(x))
+    return(exp_x / sum(exp_x))
+}
+ndvi2018_vals = na.omit(values(ndvi2018)[,1])
+ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+
+ndvi2018_vals_prob = softmax(ndvi2018_vals)
+ndvi2023_vals_prob = softmax(ndvi2023_vals)
+
+ndvi2023_vals_prob_interp = approx(seq_along(ndvi2023_vals_prob), 
+                                   ndvi2023_vals_prob, 
+                                   xout = seq_along(ndvi2018_vals_prob))$y
+
+ndvi_mat = rbind(ndvi2023_vals_prob_interp, ndvi2018_vals_prob)
+philentropy::distance(ndvi_mat, method = "kullback-leibler")
+```
+
+```{r 01-continuous-13}
+#| include: false
+#| eval: false
+library(philentropy)
+library(ks)
+
+ndvi2018_vals = na.omit(values(ndvi2018)[,1])
+ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+
+ndvi2018_vals_prob = ks::kde(ndvi2018_vals, gridsize = 500)$estimate
+ndvi2023_vals_prob = ks::kde(ndvi2023_vals, gridsize = 500)$estimate
+
+ndvi2018_vals_prob = ndvi2018_vals_prob / sum(ndvi2018_vals_prob)
+ndvi2023_vals_prob = ndvi2023_vals_prob / sum(ndvi2023_vals_prob)
+
+ndvi_mat = rbind(ndvi2018_vals_prob, ndvi2023_vals_prob)
+philentropy::distance(ndvi_mat, method = "kullback-leibler")
+```
+
+```{r 01-continuous-14}
+#| eval: false
+#| include: false
+library(philentropy)
+kde = function(x, n = 500) {
+    d = density(x, n = n)
+    return(d$y) 
+}
+
+ndvi2018_vals = na.omit(values(ndvi2018)[,1])
+ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+
+ndvi2018_prob = kde(ndvi2018_vals)
+ndvi2023_prob = kde(ndvi2023_vals)
+
+ndvi2018_prob = ndvi2018_prob / sum(ndvi2018_prob)
+ndvi2023_prob = ndvi2023_prob / sum(ndvi2023_prob)
+
+philentropy::distance(rbind(ndvi2018_prob, ndvi2023_prob), method = "kullback-leibler")
+```
+
+```{r 01-continuous-15}
+#| eval: false
+#| include: false
+library(philentropy)
+transform_vector = function(vec) {
+    vec = vec - min(vec)  
+    vec = vec / sum(vec)
+    return(sort(vec))
+}
+ndvi2018_vals = na.omit(values(ndvi2018)[, 1])
+ndvi2023_vals = na.omit(values(ndvi2023)[, 1])
+
+ndvi2018_vals = transform_vector(ndvi2018_vals)
+ndvi2023_vals = transform_vector(ndvi2023_vals)
+
+new_indices = seq(from = 1, to = length(ndvi2018_vals), 
+                  length.out = length(ndvi2023_vals))
+ndvi2018_vals_interp = approx(x = 1:length(ndvi2018_vals), y = ndvi2018_vals,
+                               xout = new_indices)$y
+
+philentropy::distance(rbind(ndvi2018_vals_interp, ndvi2023_vals), method = "kullback-leibler")
+```
+
+## Spatial context
+
+### Non-disjoint areas
+
+<!-- #### Comparison of deep learning-based feature maps using a dissimilarity measure [@malikLandscapeSimilarityAnalysis2021] -->
+
+<!-- This example uses the **keras3** [@kalinowskiKeras3InterfaceKeras2024] and **emdist** [@urbanekEmdistEarthMover2023] packages. -->
+
+```{r 01-continuous-16 }
+#| include: false
+#| eval: false
+library(keras3)
+library(emdist)
+# keras3::install_keras(backend = "tensorflow")
+normalize_raster = function(r) {
+    min_val = terra::global(r, "min")[[1]]
+    max_val = terra::global(r, "max")[[1]]
+    r = terra::app(r, fun = function(x) (x - min_val) / (max_val - min_val))
+    return(r)
+}
+
+ndvi_2018n = normalize_raster(ndvi2018)
+ndvi_2023n = normalize_raster(ndvi2023)
+
+ndvi2018_mat = as.matrix(ndvi_2018n, wide = TRUE)
+ndvi2023_mat = as.matrix(ndvi_2023n, wide = TRUE)
+
+ndvi2018_mat = array(rep(ndvi2018_mat, 3), 
+                      dim = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+ndvi2023_mat = array(rep(ndvi2023_mat, 3), 
+                      dim = c(nrow(ndvi2023_mat), ncol(ndvi2023_mat), 3))
+
+model = keras3::application_vgg16(weights = "imagenet", include_top = FALSE,
+                                  input_shape = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+
+ndvi2018_mat = keras3::array_reshape(ndvi2018_mat, c(1, dim(ndvi2018_mat)))
+ndvi2023_mat = keras3::array_reshape(ndvi2023_mat, c(1, dim(ndvi2023_mat)))
+
+features2018 = predict(model, ndvi2018_mat)
+features2023 = predict(model, ndvi2023_mat)
+
+feature_map_2018_1 = features2018[1,,,1]
+feature_map_2023_1 = features2023[1,,,1]
+
+emd2d(feature_map_2018_1, feature_map_2023_1)
+```
+
+### Disjoint areas
+
+#### The difference between an average of a focal measure of two rasters (1)
+
+This example uses the **geodiv** package [@smithGeodivMethodsCalculating2023].
+
+```{r 01-continuous-17 }
+library(geodiv)
+ndvi2018_sa = sa(ndvi2018)
+ndvi2023_sa = sa(ndvi2023)
+abs(ndvi2023_sa - ndvi2018_sa)
+```
+
+#### The difference between an average of a focal measure of two rasters (1)
+
+This example uses the **GLCMTextures** package [@ilichGLCMTextures2020].
+
+```{r 01-continuous-18 }
+library(GLCMTextures)
+ndvi2018_q = quantize_raster(ndvi2018, n_levels = 16, method = "equal prob")
+ndvi2023_q = quantize_raster(ndvi2023, n_levels = 16, method = "equal prob")
+
+ndvi2018_q_mat = as.matrix(ndvi2018_q, wide = TRUE)
+ndvi2023_q_mat = as.matrix(ndvi2023_q, wide = TRUE)
+
+ndvi2018_horizontal_glcm = make_glcm(ndvi2018_q_mat, n_levels = 16, 
+                                     shift = c(1,0), na.rm = TRUE)
+ndvi2023_horizontal_glcm = make_glcm(ndvi2023_q_mat, n_levels = 16, 
+                                     shift = c(1,0), na.rm = TRUE)
+
+ndvi2018_hom = glcm_metrics(ndvi2018_horizontal_glcm, "glcm_homogeneity")
+ndvi2023_hom = glcm_metrics(ndvi2023_horizontal_glcm, "glcm_homogeneity")
+abs(ndvi2023_hom - ndvi2018_hom)
+```
+
+#### Average of Structural Similarity Index [@wangImageQualityAssessment2004;@robertsonAssessingQualitySpatial2014]
+
+This example uses the **SSIMmap** package [@haSSIMmapStructuralSimilarity2023].
+
+```{r 01-continuous-19 }
+library(SSIMmap)
+ssim_raster(ndvi2018, ndvi2023, global = TRUE)
+```
+
+#### The similarity index (CQ) based on the co-dispersion coefficient
+
+This example uses the **SpatialPack** package [@vallejos2020spatial].
+
+::: {.callout .callout-info}
+The `CQ()` function from the **SpatialPack** package does not work for rasters with missing values.
+:::
+
+```{r 01-continuous-20 }
+#| eval: false
+library(SpatialPack)
+ndvi2018_mat = as.matrix(ndvi2018, wide = TRUE)
+ndvi2023_mat = as.matrix(ndvi2023, wide = TRUE)
+ndvi_CQ = CQ(ndvi2018_mat, ndvi2023_mat)
+ndvi_CQ$CQ
+```
+
+#### Comparison of the values of the Boltzmann entropy of a landscape gradient [@gaoAggregationbasedMethodComputing2019]
+
+This example uses the **bespatial** package [@nowosadBespatialBoltzmannEntropy2024].
+
+```{r 01-continuous-20b }
+library(bespatial)
+ndvi2018_bes = bes_g_gao(ndvi2018, method = "hierarchy", relative = TRUE)
+ndvi2023_bes = bes_g_gao(ndvi2023, method = "hierarchy", relative = TRUE)
+abs(ndvi2023_bes$value - ndvi2018_bes$value)
+```
+
+
+#### Comparison of deep learning-based feature maps using a dissimilarity measure [@malikLandscapeSimilarityAnalysis2021]
+
+This example uses the **keras3** [@kalinowskiKeras3InterfaceKeras2024] and **philentropy** [@hgPhilentropyInformationTheory2018] packages.
+
+::: {.callout .callout-info}
+The example below is very simplified as it uses only one feature map from the pretrained VGG16 model.
+That model was trained on a different type of data (images) and might not be suitable for the analysis of NDVI values.
+:::
+
+<!-- deep learning based feature maps and dissimilarity measure -->
+```{r 01-continuous-21 }
+library(keras3)
+library(philentropy)
+# keras3::install_keras(backend = "tensorflow")
+normalize_raster = function(r) {
+    min_val = terra::global(r, "min", na.rm = TRUE)[[1]]
+    max_val = terra::global(r, "max", na.rm = TRUE)[[1]]
+    r = terra::app(r, fun = function(x) (x - min_val) / (max_val - min_val))
+    return(r)
+}
+
+ndvi_2018n = normalize_raster(ndvi2018)
+ndvi_2023n = normalize_raster(ndvi2023)
+
+ndvi2018_mat = as.matrix(ndvi_2018n, wide = TRUE)
+ndvi2023_mat = as.matrix(ndvi_2023n, wide = TRUE)
+
+ndvi2018_mat = array(rep(ndvi2018_mat, 3), 
+                      dim = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+ndvi2023_mat = array(rep(ndvi2023_mat, 3), 
+                      dim = c(nrow(ndvi2023_mat), ncol(ndvi2023_mat), 3))
+
+model = keras3::application_vgg16(weights = "imagenet", include_top = FALSE,
+                                  input_shape = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+
+ndvi2018_mat = keras3::array_reshape(ndvi2018_mat, c(1, dim(ndvi2018_mat)))
+ndvi2023_mat = keras3::array_reshape(ndvi2023_mat, c(1, dim(ndvi2023_mat)))
+
+features2018 = predict(model, ndvi2018_mat)
+features2023 = predict(model, ndvi2023_mat)
+
+feature_map_2018_1 = as.vector(features2018[1,,,1])
+feature_map_2023_1 = as.vector(features2023[1,,,1])
+
+distance(rbind(feature_map_2018_1, feature_map_2023_1))
+```
+
+# Multiple values outcome
+
+#### The distribution of the difference between values of two rasters
+
+```{r 01-continuous-22 }
+ndvi_diff = ndvi2023 - ndvi2018
+hist(ndvi_diff)
+```
+
+#### Statistics of the differences between rasters' values calculated at many scales
+
+This example uses the **waywiser** package [@mahoneyWaywiserErgonomicMethods2023].
+
+```{r 01-continuous-23 }
+#| warning: false
+library(waywiser)
+cell_sizes = c(200, 400, 600)
+ndvi_multi_scale = ww_multi_scale(truth = ndvi2018, estimate = ndvi2023,
+                                 metrics = list(yardstick::rmse), 
+                                 cellsize = cell_sizes,
+                                 progress = FALSE)
+ndvi_multi_scale
+```
+
+<!-- ?Pontius Jr., R.G., Thontteh, O., Chen, H. 2008. Components of information for multiple resolution comparison between maps that share a real variable. Environmental and Ecological Statistics 15 (2), 111-142 -->
+
+```{r 01-continuous-24 }
+#| include: false
+library(diffeR)
+ndvi_mad = MAD(ndvi2023, ndvi2018, eval = "multiple")
+```
