@@ -39,16 +39,22 @@ knitr::opts_chunk$set(time_it = TRUE, message = FALSE)
 This document shows a set of examples related to the article "Comparing spatial patterns in raster data using R". 
 The examples are focused on comparing two layers of spatial continuous raster data, and are divided into three groups: raster outcome, single value outcome, and multiple value outcome.
 
-The examples in this document use two raster layers representing NDVI values derived from Sentinel-2 images [@Sentinel2MSILevel2A2022] for early summer of 2018 and 2023 in the area of Tartu, Estonia.
+The examples in this document use two raster layers representing NDVI values derived from Sentinel-2 images [@Sentinel2MSILevel2A2022] for early summer of 2018 and 2023 in the area of Tartu, Estonia, and Poznań, Poland for 2023.
 The **terra** package [@hijmansTerraSpatialData2024] is used for raster data manipulation.
 
 The calculation time for each example is estimated and displayed at the end of each code chunk.
 
 ```{r 01-continuous-2, time_it = FALSE}
+#| layout-ncol: 3
+#| fig-height: 7
+#| fig-witdh: 10
 library(terra)
-ndvi2018 = rast("data/sentinel2_ndvi2018s.tif")
-ndvi2023 = rast("data/sentinel2_ndvi2023s.tif")
-panel(c(ndvi2018, ndvi2023))
+ndvi2018_tartu = rast("data/ndvi2018_tartu.tif")
+ndvi2023_tartu = rast("data/ndvi2023_tartu.tif")
+ndvi2023_poznan = rast("data/ndvi2023_poznan.tif")
+plot(ndvi2018_tartu, main = "Tartu (2018)")
+plot(ndvi2023_tartu, main = "Tartu (2023)")
+plot(ndvi2023_poznan, main = "Poznań (2023)")
 ```
 
 # Raster outcome
@@ -60,7 +66,7 @@ panel(c(ndvi2018, ndvi2023))
 #### The difference between values of two rasters for each cell
 
 ```{r 01-continuous-3 }
-ndvi_diff = ndvi2023 - ndvi2018
+ndvi_diff = ndvi2023_tartu - ndvi2018_tartu
 plot(ndvi_diff)
 ```
 
@@ -71,7 +77,7 @@ plot(ndvi_diff)
 #### Correlation coefficient between focal regions of two rasters
 
 ```{r 01-continuous-4 }
-ndvi_cor = focalPairs(c(ndvi2023, ndvi2018), w = 5,
+ndvi_cor = focalPairs(c(ndvi2023_tartu, ndvi2018_tartu), w = 5,
                       fun = "pearson", na.rm = TRUE)
 plot(ndvi_cor)
 ```
@@ -84,11 +90,11 @@ This example uses the **geodiv** package [@smithGeodivMethodsCalculating2023].
 # 'sa': average surface roughness
 library(geodiv)
 window = matrix(1, nrow = 5, ncol = 5)
-ndvi2018_sa_mw = focal_metrics(ndvi2018, window = window,
+ndvi2018_tartu_sa_mw = focal_metrics(ndvi2018_tartu, window = window,
                                metric = "sa", progress = FALSE)
-ndvi2023_sa_mw = focal_metrics(ndvi2023, window = window,
+ndvi2023_tartu_sa_mw = focal_metrics(ndvi2023_tartu, window = window,
                                metric = "sa", progress = FALSE)
-ndvi_diff_sa_mw = ndvi2023_sa_mw$sa - ndvi2018_sa_mw$sa
+ndvi_diff_sa_mw = ndvi2023_tartu_sa_mw$sa - ndvi2018_tartu_sa_mw$sa
 plot(ndvi_diff_sa_mw)
 ```
 
@@ -98,24 +104,24 @@ This example uses the **GLCMTextures** package [@ilichGLCMTextures2020].
 
 ```{r 01-continuous-6 }
 library(GLCMTextures) 
-ndvi2018_q = quantize_raster(ndvi2018, n_levels = 16, method = "equal prob")
-ndvi2023_q = quantize_raster(ndvi2023, n_levels = 16, method = "equal prob")
+ndvi2018_tartu_q = quantize_raster(ndvi2018_tartu, n_levels = 16, method = "equal prob")
+ndvi2023_tartu_q = quantize_raster(ndvi2023_tartu, n_levels = 16, method = "equal prob")
 
-ndvi2018_textures = glcm_textures(ndvi2018_q, w = c(5, 5), na.rm = TRUE,
+ndvi2018_tartu_textures = glcm_textures(ndvi2018_tartu_q, w = c(5, 5), na.rm = TRUE,
                                   metrics = "glcm_homogeneity", 
                                   n_levels = 16, quantization = "none") 
-ndvi2023_textures = glcm_textures(ndvi2023_q, w = c(5, 5), na.rm = TRUE,
+ndvi2023_tartu_textures = glcm_textures(ndvi2023_tartu_q, w = c(5, 5), na.rm = TRUE,
                                   metrics = "glcm_homogeneity",
                                   n_levels = 16, quantization = "none")
 
-ndvi2023_textures_diff = ndvi2023_textures - ndvi2018_textures
-plot(ndvi2023_textures_diff)
+ndvi2023_tartu_textures_diff = ndvi2023_tartu_textures - ndvi2018_tartu_textures
+plot(ndvi2023_tartu_textures_diff)
 ```
 
 #### Spatial autocorrelation analysis of the differences [@cliffComputingSpatialCorrespondence1970]
 
 ```{r 01-continuous-7 }
-ndvi_diff = ndvi2023 - ndvi2018
+ndvi_diff = ndvi2023_tartu - ndvi2018_tartu
 ndvi_diff_autocor = autocor(ndvi_diff, method = "moran", global = FALSE)
 plot(ndvi_diff_autocor)
 ```
@@ -126,7 +132,7 @@ This example uses the **SSIMmap** package [@haSSIMmapStructuralSimilarity2023].
 
 ```{r 01-continuous-8 }
 library(SSIMmap)
-ndvi_ssim = ssim_raster(ndvi2018, ndvi2023, global = FALSE, w = 5)
+ndvi_ssim = ssim_raster(ndvi2018_tartu, ndvi2023_tartu, global = FALSE, w = 5)
 plot(ndvi_ssim)
 ```
 
@@ -137,11 +143,11 @@ This example uses the **rasterdiv** package [@rocchiniRasterdivInformationTheory
 ```{r 01-continuous-8b }
 #| warning: false
 library(rasterdiv)
-ndvi2018_int = ndvi2018 * 100
-ndvi2023_int = ndvi2023 * 100
-ndvi2018_rao = paRao(ndvi2018_int, window = 5, progBar = FALSE)
-ndvi2023_rao = paRao(ndvi2023_int, window = 5, progBar = FALSE)
-ndvi_rao_diff = ndvi2023_rao[[1]][[1]] - ndvi2018_rao[[1]][[1]]
+ndvi2018_tartu_int = ndvi2018_tartu * 100
+ndvi2023_tartu_int = ndvi2023_tartu * 100
+ndvi2018_tartu_rao = paRao(ndvi2018_tartu_int, window = 5, progBar = FALSE)
+ndvi2023_tartu_rao = paRao(ndvi2023_tartu_int, window = 5, progBar = FALSE)
+ndvi_rao_diff = ndvi2023_tartu_rao[[1]][[1]] - ndvi2018_tartu_rao[[1]][[1]]
 plot(ndvi_rao_diff)
 ```
 
@@ -157,7 +163,7 @@ This example uses the **yardstick** package [@kuhnYardstickTidyCharacterizations
 
 ```{r 01-continuous-9 }
 library(yardstick)
-ndvi_rmse = rmse_vec(values(ndvi2023)[,1], values(ndvi2018)[,1])
+ndvi_rmse = rmse_vec(values(ndvi2023_tartu)[,1], values(ndvi2018_tartu)[,1])
 ndvi_rmse
 ```
 
@@ -167,7 +173,7 @@ This example uses the **diffeR** package [@pontiusjr.DiffeRMetricsDifference2023
 
 ```{r 01-continuous-10 }
 library(diffeR)
-ndvi_mad = MAD(ndvi2023, ndvi2018)
+ndvi_mad = MAD(ndvi2023_tartu, ndvi2018_tartu)
 ndvi_mad
 ```
 
@@ -182,7 +188,7 @@ This example uses the **philentropy** [@hgPhilentropyInformationTheory2018] pack
 #| eval: false
 library(philentropy)
 softmax = function(x) exp(x) / sum(exp(x))
-mat = cbind(values(ndvi2023)[,1], values(ndvi2018)[,1])
+mat = cbind(values(ndvi2023_tartu)[,1], values(ndvi2018_tartu)[,1])
 mat = na.omit(mat)
 mat = apply(mat, 1, softmax)
 mat = apply(mat, 1, function(x) x / sum(x))
@@ -197,17 +203,17 @@ softmax = function(x) {
     exp_x = exp(x - max(x))
     return(exp_x / sum(exp_x))
 }
-ndvi2018_vals = na.omit(values(ndvi2018)[,1])
-ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+ndvi2023_tartu_vals = na.omit(values(ndvi2023_tartu)[,1])
+ndvi2023_poznan_vals = na.omit(values(ndvi2023_poznan)[,1])
 
-ndvi2018_vals_prob = softmax(ndvi2018_vals)
-ndvi2023_vals_prob = softmax(ndvi2023_vals)
+ndvi2023_tartu_vals_prob = softmax(ndvi2023_tartu_vals)
+ndvi2023_poznan_vals_prob = softmax(ndvi2023_poznan_vals)
 
-ndvi2023_vals_prob_interp = approx(seq_along(ndvi2023_vals_prob), 
-                                   ndvi2023_vals_prob, 
-                                   xout = seq_along(ndvi2018_vals_prob))$y
+ndvi2023_tartu_vals_prob_interp = approx(seq_along(ndvi2023_tartu_vals_prob), 
+                                   ndvi2023_tartu_vals_prob, 
+                                   xout = seq_along(ndvi2023_poznan_vals_prob))$y
 
-ndvi_mat = rbind(ndvi2023_vals_prob_interp, ndvi2018_vals_prob)
+ndvi_mat = rbind(ndvi2023_poznan_vals_prob, ndvi2023_tartu_vals_prob_interp)
 philentropy::distance(ndvi_mat, method = "kullback-leibler")
 ```
 
@@ -217,16 +223,16 @@ philentropy::distance(ndvi_mat, method = "kullback-leibler")
 library(philentropy)
 library(ks)
 
-ndvi2018_vals = na.omit(values(ndvi2018)[,1])
-ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+ndvi2018_tartu_vals = na.omit(values(ndvi2018_tartu)[,1])
+ndvi2023_tartu_vals = na.omit(values(ndvi2023_tartu)[,1])
 
-ndvi2018_vals_prob = ks::kde(ndvi2018_vals, gridsize = 500)$estimate
-ndvi2023_vals_prob = ks::kde(ndvi2023_vals, gridsize = 500)$estimate
+ndvi2018_tartu_vals_prob = ks::kde(ndvi2018_tartu_vals, gridsize = 500)$estimate
+ndvi2023_tartu_vals_prob = ks::kde(ndvi2023_tartu_vals, gridsize = 500)$estimate
 
-ndvi2018_vals_prob = ndvi2018_vals_prob / sum(ndvi2018_vals_prob)
-ndvi2023_vals_prob = ndvi2023_vals_prob / sum(ndvi2023_vals_prob)
+ndvi2018_tartu_vals_prob = ndvi2018_tartu_vals_prob / sum(ndvi2018_tartu_vals_prob)
+ndvi2023_tartu_vals_prob = ndvi2023_tartu_vals_prob / sum(ndvi2023_tartu_vals_prob)
 
-ndvi_mat = rbind(ndvi2018_vals_prob, ndvi2023_vals_prob)
+ndvi_mat = rbind(ndvi2018_tartu_vals_prob, ndvi2023_tartu_vals_prob)
 philentropy::distance(ndvi_mat, method = "kullback-leibler")
 ```
 
@@ -239,16 +245,16 @@ kde = function(x, n = 500) {
     return(d$y) 
 }
 
-ndvi2018_vals = na.omit(values(ndvi2018)[,1])
-ndvi2023_vals = na.omit(values(ndvi2023)[,1])
+ndvi2018_tartu_vals = na.omit(values(ndvi2018_tartu)[,1])
+ndvi2023_tartu_vals = na.omit(values(ndvi2023_tartu)[,1])
 
-ndvi2018_prob = kde(ndvi2018_vals)
-ndvi2023_prob = kde(ndvi2023_vals)
+ndvi2018_tartu_prob = kde(ndvi2018_tartu_vals)
+ndvi2023_tartu_prob = kde(ndvi2023_tartu_vals)
 
-ndvi2018_prob = ndvi2018_prob / sum(ndvi2018_prob)
-ndvi2023_prob = ndvi2023_prob / sum(ndvi2023_prob)
+ndvi2018_tartu_prob = ndvi2018_tartu_prob / sum(ndvi2018_tartu_prob)
+ndvi2023_tartu_prob = ndvi2023_tartu_prob / sum(ndvi2023_tartu_prob)
 
-philentropy::distance(rbind(ndvi2018_prob, ndvi2023_prob), method = "kullback-leibler")
+philentropy::distance(rbind(ndvi2018_tartu_prob, ndvi2023_tartu_prob), method = "kullback-leibler")
 ```
 
 ```{r 01-continuous-15}
@@ -260,18 +266,18 @@ transform_vector = function(vec) {
     vec = vec / sum(vec)
     return(sort(vec))
 }
-ndvi2018_vals = na.omit(values(ndvi2018)[, 1])
-ndvi2023_vals = na.omit(values(ndvi2023)[, 1])
+ndvi2018_tartu_vals = na.omit(values(ndvi2018_tartu)[, 1])
+ndvi2023_tartu_vals = na.omit(values(ndvi2023_tartu)[, 1])
 
-ndvi2018_vals = transform_vector(ndvi2018_vals)
-ndvi2023_vals = transform_vector(ndvi2023_vals)
+ndvi2018_tartu_vals = transform_vector(ndvi2018_tartu_vals)
+ndvi2023_tartu_vals = transform_vector(ndvi2023_tartu_vals)
 
-new_indices = seq(from = 1, to = length(ndvi2018_vals), 
-                  length.out = length(ndvi2023_vals))
-ndvi2018_vals_interp = approx(x = 1:length(ndvi2018_vals), y = ndvi2018_vals,
+new_indices = seq(from = 1, to = length(ndvi2018_tartu_vals), 
+                  length.out = length(ndvi2023_tartu_vals))
+ndvi2018_tartu_vals_interp = approx(x = 1:length(ndvi2018_tartu_vals), y = ndvi2018_tartu_vals,
                                xout = new_indices)$y
 
-philentropy::distance(rbind(ndvi2018_vals_interp, ndvi2023_vals), method = "kullback-leibler")
+philentropy::distance(rbind(ndvi2018_tartu_vals_interp, ndvi2023_tartu_vals), method = "kullback-leibler")
 ```
 
 ## Spatial context
@@ -295,30 +301,39 @@ normalize_raster = function(r) {
     return(r)
 }
 
-ndvi_2018n = normalize_raster(ndvi2018)
-ndvi_2023n = normalize_raster(ndvi2023)
+ndvi_2018n = normalize_raster(ndvi2018_tartu)
+ndvi_2023n = normalize_raster(ndvi2023_tartu)
 
-ndvi2018_mat = as.matrix(ndvi_2018n, wide = TRUE)
-ndvi2023_mat = as.matrix(ndvi_2023n, wide = TRUE)
+ndvi2018_tartu_mat = as.matrix(ndvi_2018n, wide = TRUE)
+ndvi2023_tartu_mat = as.matrix(ndvi_2023n, wide = TRUE)
 
-ndvi2018_mat = array(rep(ndvi2018_mat, 3), 
-                      dim = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
-ndvi2023_mat = array(rep(ndvi2023_mat, 3), 
-                      dim = c(nrow(ndvi2023_mat), ncol(ndvi2023_mat), 3))
+ndvi2018_tartu_mat = array(rep(ndvi2018_tartu_mat, 3), 
+                      dim = c(nrow(ndvi2018_tartu_mat), ncol(ndvi2018_tartu_mat), 3))
+ndvi2023_tartu_mat = array(rep(ndvi2023_tartu_mat, 3), 
+                      dim = c(nrow(ndvi2023_tartu_mat), ncol(ndvi2023_tartu_mat), 3))
 
 model = keras3::application_vgg16(weights = "imagenet", include_top = FALSE,
-                                  input_shape = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+                                  input_shape = c(nrow(ndvi2018_tartu_mat), ncol(ndvi2018_tartu_mat), 3))
 
-ndvi2018_mat = keras3::array_reshape(ndvi2018_mat, c(1, dim(ndvi2018_mat)))
-ndvi2023_mat = keras3::array_reshape(ndvi2023_mat, c(1, dim(ndvi2023_mat)))
+ndvi2018_tartu_mat = keras3::array_reshape(ndvi2018_tartu_mat, c(1, dim(ndvi2018_tartu_mat)))
+ndvi2023_tartu_mat = keras3::array_reshape(ndvi2023_tartu_mat, c(1, dim(ndvi2023_tartu_mat)))
 
-features2018 = predict(model, ndvi2018_mat)
-features2023 = predict(model, ndvi2023_mat)
+features2018 = predict(model, ndvi2018_tartu_mat)
+features2023 = predict(model, ndvi2023_tartu_mat)
 
 feature_map_2018_1 = features2018[1,,,1]
 feature_map_2023_1 = features2023[1,,,1]
 
 emd2d(feature_map_2018_1, feature_map_2023_1)
+```
+
+#### Average of Structural Similarity Index [@wangImageQualityAssessment2004;@robertsonAssessingQualitySpatial2014]
+
+This example uses the **SSIMmap** package [@haSSIMmapStructuralSimilarity2023].
+
+```{r 01-continuous-19 }
+library(SSIMmap)
+ssim_raster(ndvi2018_tartu, ndvi2023_tartu, global = TRUE)
 ```
 
 ### Disjoint areas
@@ -329,9 +344,9 @@ This example uses the **geodiv** package [@smithGeodivMethodsCalculating2023].
 
 ```{r 01-continuous-17 }
 library(geodiv)
-ndvi2018_sa = sa(ndvi2018)
-ndvi2023_sa = sa(ndvi2023)
-abs(ndvi2023_sa - ndvi2018_sa)
+ndvi2023_tartu_sa = sa(ndvi2023_tartu)
+ndvi2023_poznan_sa = sa(ndvi2023_poznan)
+abs(ndvi2023_tartu_sa - ndvi2023_poznan_sa)
 ```
 
 #### The difference between an average of a focal measure of two rasters (1)
@@ -340,29 +355,20 @@ This example uses the **GLCMTextures** package [@ilichGLCMTextures2020].
 
 ```{r 01-continuous-18 }
 library(GLCMTextures)
-ndvi2018_q = quantize_raster(ndvi2018, n_levels = 16, method = "equal prob")
-ndvi2023_q = quantize_raster(ndvi2023, n_levels = 16, method = "equal prob")
+ndvi2023_tartu_q = quantize_raster(ndvi2023_tartu, n_levels = 16, method = "equal prob")
+ndvi2023_poznan_q = quantize_raster(ndvi2023_poznan, n_levels = 16, method = "equal prob")
 
-ndvi2018_q_mat = as.matrix(ndvi2018_q, wide = TRUE)
-ndvi2023_q_mat = as.matrix(ndvi2023_q, wide = TRUE)
+ndvi2023_tartu_q_mat = as.matrix(ndvi2023_tartu_q, wide = TRUE)
+ndvi2023_poznan_q_mat = as.matrix(ndvi2023_poznan_q, wide = TRUE)
 
-ndvi2018_horizontal_glcm = make_glcm(ndvi2018_q_mat, n_levels = 16, 
+ndvi2023_tartu_horizontal_glcm = make_glcm(ndvi2023_tartu_q_mat, n_levels = 16, 
                                      shift = c(1,0), na.rm = TRUE)
-ndvi2023_horizontal_glcm = make_glcm(ndvi2023_q_mat, n_levels = 16, 
+ndvi2023_poznan_horizontal_glcm = make_glcm(ndvi2023_poznan_q_mat, n_levels = 16, 
                                      shift = c(1,0), na.rm = TRUE)
 
-ndvi2018_hom = glcm_metrics(ndvi2018_horizontal_glcm, "glcm_homogeneity")
-ndvi2023_hom = glcm_metrics(ndvi2023_horizontal_glcm, "glcm_homogeneity")
-abs(ndvi2023_hom - ndvi2018_hom)
-```
-
-#### Average of Structural Similarity Index [@wangImageQualityAssessment2004;@robertsonAssessingQualitySpatial2014]
-
-This example uses the **SSIMmap** package [@haSSIMmapStructuralSimilarity2023].
-
-```{r 01-continuous-19 }
-library(SSIMmap)
-ssim_raster(ndvi2018, ndvi2023, global = TRUE)
+ndvi2023_tartu_hom = glcm_metrics(ndvi2023_tartu_horizontal_glcm, "glcm_homogeneity")
+ndvi2023_poznan_hom = glcm_metrics(ndvi2023_poznan_horizontal_glcm, "glcm_homogeneity")
+abs(ndvi2023_tartu_hom - ndvi2023_poznan_hom)
 ```
 
 #### The similarity index (CQ) based on the co-dispersion coefficient
@@ -376,9 +382,9 @@ The `CQ()` function from the **SpatialPack** package does not work for rasters w
 ```{r 01-continuous-20 }
 #| eval: false
 library(SpatialPack)
-ndvi2018_mat = as.matrix(ndvi2018, wide = TRUE)
-ndvi2023_mat = as.matrix(ndvi2023, wide = TRUE)
-ndvi_CQ = CQ(ndvi2018_mat, ndvi2023_mat)
+ndvi2023_tartu_mat = as.matrix(ndvi2023_tartu, wide = TRUE)
+ndvi2023_poznan_mat = as.matrix(ndvi2023_poznan, wide = TRUE)
+ndvi_CQ = CQ(ndvi2023_tartu_mat, ndvi2023_poznan_mat)
 ndvi_CQ$CQ
 ```
 
@@ -388,11 +394,10 @@ This example uses the **bespatial** package [@nowosadBespatialBoltzmannEntropy20
 
 ```{r 01-continuous-20b }
 library(bespatial)
-ndvi2018_bes = bes_g_gao(ndvi2018, method = "hierarchy", relative = TRUE)
-ndvi2023_bes = bes_g_gao(ndvi2023, method = "hierarchy", relative = TRUE)
-abs(ndvi2023_bes$value - ndvi2018_bes$value)
+ndvi2023_tartu_bes = bes_g_gao(ndvi2023_tartu, method = "hierarchy", relative = TRUE)
+ndvi2023_poznan_bes = bes_g_gao(ndvi2023_poznan, method = "hierarchy", relative = TRUE)
+abs(ndvi2023_tartu_bes$value - ndvi2023_poznan_bes$value)
 ```
-
 
 #### Comparison of deep learning-based feature maps using a dissimilarity measure [@malikLandscapeSimilarityAnalysis2021]
 
@@ -415,30 +420,30 @@ normalize_raster = function(r) {
     return(r)
 }
 
-ndvi_2018n = normalize_raster(ndvi2018)
-ndvi_2023n = normalize_raster(ndvi2023)
+ndvi2023n_tartu = normalize_raster(ndvi2023_tartu)
+ndvi2023n_poznan = normalize_raster(ndvi2023_poznan)
 
-ndvi2018_mat = as.matrix(ndvi_2018n, wide = TRUE)
-ndvi2023_mat = as.matrix(ndvi_2023n, wide = TRUE)
+ndvi2023_tartu_mat = as.matrix(ndvi2023n_tartu, wide = TRUE)
+ndvi2023_poznan_mat = as.matrix(ndvi2023n_poznan, wide = TRUE)
 
-ndvi2018_mat = array(rep(ndvi2018_mat, 3), 
-                      dim = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
-ndvi2023_mat = array(rep(ndvi2023_mat, 3), 
-                      dim = c(nrow(ndvi2023_mat), ncol(ndvi2023_mat), 3))
+ndvi2023_tartu_mat = array(rep(ndvi2023_tartu_mat, 3), 
+                      dim = c(nrow(ndvi2023_tartu_mat), ncol(ndvi2023_tartu_mat), 3))
+ndvi2023_poznan_mat = array(rep(ndvi2023_poznan_mat, 3), 
+                      dim = c(nrow(ndvi2023_poznan_mat), ncol(ndvi2023_poznan_mat), 3))
 
 model = keras3::application_vgg16(weights = "imagenet", include_top = FALSE,
-                                  input_shape = c(nrow(ndvi2018_mat), ncol(ndvi2018_mat), 3))
+                                  input_shape = c(nrow(ndvi2023_tartu_mat), ncol(ndvi2023_tartu_mat), 3))
 
-ndvi2018_mat = keras3::array_reshape(ndvi2018_mat, c(1, dim(ndvi2018_mat)))
-ndvi2023_mat = keras3::array_reshape(ndvi2023_mat, c(1, dim(ndvi2023_mat)))
+ndvi2023_tartu_mat = keras3::array_reshape(ndvi2023_tartu_mat, c(1, dim(ndvi2023_tartu_mat)))
+ndvi2023_poznan_mat = keras3::array_reshape(ndvi2023_poznan_mat, c(1, dim(ndvi2023_poznan_mat)))
 
-features2018 = predict(model, ndvi2018_mat)
-features2023 = predict(model, ndvi2023_mat)
+features2023_tartu = predict(model, ndvi2023_tartu_mat)
+features2023_poznan = predict(model, ndvi2023_poznan_mat)
 
-feature_map_2018_1 = as.vector(features2018[1,,,1])
-feature_map_2023_1 = as.vector(features2023[1,,,1])
+feature_map_tartu_1 = as.vector(features2023_tartu[1,,,1])
+feature_map_poznan_1 = as.vector(features2023_poznan[1,,,1])
 
-distance(rbind(feature_map_2018_1, feature_map_2023_1))
+distance(rbind(feature_map_tartu_1, feature_map_poznan_1))
 ```
 
 # Multiple values outcome
@@ -446,7 +451,7 @@ distance(rbind(feature_map_2018_1, feature_map_2023_1))
 #### The distribution of the difference between values of two rasters
 
 ```{r 01-continuous-22 }
-ndvi_diff = ndvi2023 - ndvi2018
+ndvi_diff = ndvi2023_tartu - ndvi2018_tartu
 hist(ndvi_diff)
 ```
 
@@ -458,7 +463,7 @@ This example uses the **waywiser** package [@mahoneyWaywiserErgonomicMethods2023
 #| warning: false
 library(waywiser)
 cell_sizes = c(200, 400, 600)
-ndvi_multi_scale = ww_multi_scale(truth = ndvi2018, estimate = ndvi2023,
+ndvi_multi_scale = ww_multi_scale(truth = ndvi2018_tartu, estimate = ndvi2023_tartu,
                                  metrics = list(yardstick::rmse), 
                                  cellsize = cell_sizes,
                                  progress = FALSE)
@@ -470,5 +475,5 @@ ndvi_multi_scale
 ```{r 01-continuous-24 }
 #| include: false
 library(diffeR)
-ndvi_mad = MAD(ndvi2023, ndvi2018, eval = "multiple")
+ndvi_mad = MAD(ndvi2023_tartu, ndvi2018_tartu, eval = "multiple")
 ```
