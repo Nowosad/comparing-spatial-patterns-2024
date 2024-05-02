@@ -1,5 +1,5 @@
 ---
-title: "Methods for comparing two layers of spatial continuous raster data"
+title: "Methods for comparing two layers of spatial categorical raster data"
 author: 
     - name: "Jakub Nowosad"
       orcid: 0000-0002-1057-3721
